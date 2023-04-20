@@ -1,4 +1,8 @@
 #!/bin/bash
 
+# Update
+git pull
+
+# Run
 clear
 python3 bot.py
