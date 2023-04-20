@@ -32,11 +32,11 @@ bot = discord.Bot()
 
 @bot.event
 async def on_application_command_error(ctx):
-	print(f'ERR:\n{ctx}')
+	print(f' ERR > \n{ctx}')
 
 @bot.event
 async def on_ready():
-    print('LOG: Bot is ready!')
+    print('LOG > Bot is ready!')
     
 
 # Commands
