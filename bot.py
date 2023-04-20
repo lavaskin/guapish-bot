@@ -47,26 +47,20 @@ async def request(ctx, title: str, year: int):
 	now = datetime.now()
 
 	# Check if the user has the Patreon role
-	foundRole = False
-	for role in ctx.author.roles:
-		if str(role.id) == PATREON_ROLE:
-			foundRole = True
-			break
-	if not foundRole:
+	roles = [str(role.id) for role in ctx.author.roles]
+	if PATREON_ROLE not in roles:
 		await ctx.respond('You must be a Patreon sub to use this command! Subscribe here:\n\t*https://www.patreon.com/GUAPISH*')
 		return
 
 	# Check if user already has a request by checking if any of the documents have the same user id in the 'user' field
-	# as well as not being picked yet
-	existingReqs = ref.where('user', '==', user).where('picked', '==', False).stream()
+	existingReqs = [doc.to_dict() for doc in ref.where('user', '==', user).stream()]
 	for req in existingReqs:
-		reqObj = req.to_dict()
 		# Check if the request is from the same month
-		date = reqObj['date']
+		date = req['date']
 		if date.month == now.month and date.year == now.year:
 			month = date.strftime('%B')
-			title = reqObj['title']
-			year  = reqObj['year']
+			title = req['title']
+			year  = req['year']
 			await ctx.respond(f'You already have a request for {month}:\n\t*{title} ({year})*\nPlease wait until the next month to request again.')
 			return
 	
@@ -85,17 +79,16 @@ async def request(ctx, title: str, year: int):
 async def requests(ctx):
 	ref = getRef()
 
-	# Get all requests
-	reqs = ref.stream()
-	if reqs is None:
+	# Get all requests that are not picked
+	reqs = [doc.to_dict() for doc in ref.where('picked', '==', False).stream()]
+	if reqs == []:
 		await ctx.respond('There are no requests at the moment.')
 		return
 	
 	# Build the response
 	res = 'Current Requests:\n'
 	for req in reqs:
-		reqObj = req.to_dict()
-		res += f'\t - {reqObj["title"]} ({reqObj["year"]}) by *<@{reqObj["user"]}>*\n'
+		res += f'\t - {req["title"]} ({req["year"]}) by *<@{req["user"]}>*\n'
 	
 	await ctx.respond(res)
 
