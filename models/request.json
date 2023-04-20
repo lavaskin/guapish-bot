@@ -1,0 +1,7 @@
+{
+	"user": "discord user id",
+	"title": "Movie Title",
+	"year": "Movie Year",
+	"date": "date user requested movie",
+	"picked": "true/false"
+}
