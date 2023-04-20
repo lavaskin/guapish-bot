@@ -59,14 +59,13 @@ async def request(ctx, title: str, year: int):
 		date = req['date']
 		if date.month == now.month and date.year == now.year:
 			month = date.strftime('%B')
-			title = req['title']
-			year  = req['year']
-			await ctx.respond(f'You already have a request for {month}:\n\t*{title} ({year})*\nPlease wait until the next month to request again.')
+			await ctx.respond(f'You already have a request for {month}:\n\t*{req["title"]} ({req["year"]})*\nPlease wait until the next month to request again.')
 			return
 	
 	# Add the request to the database
 	ref.add({
-		'user': user,
+		'user_id': user,
+		'user_name': ctx.author.name,
 		'title': title,
 		'year': year,
 		'date': now,
@@ -88,7 +87,7 @@ async def requests(ctx):
 	# Build the response
 	res = 'Current Requests:\n'
 	for req in reqs:
-		res += f'\t - {req["title"]} ({req["year"]}) by *<@{req["user"]}>*\n'
+		res += f'\t• {req["title"]} (*{req["year"]}*) by **{req["user_name"]}**\n'
 	
 	await ctx.respond(res)
 

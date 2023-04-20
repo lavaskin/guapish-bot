@@ -1,5 +1,6 @@
 {
-	"user": "discord user id",
+	"user_id": "discord user id",
+	"user_name": "discord user name",
 	"title": "Movie Title",
 	"year": "Movie Year",
 	"date": "date user requested movie",
