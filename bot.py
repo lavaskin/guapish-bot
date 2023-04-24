@@ -118,7 +118,7 @@ async def roll(ctx):
 		'picked': True
 	})
 
-	await ctx.respond(f'Picked {reqDict["title"]} ({reqDict["year"]}) by *<@{reqDict["user"]}>*')
+	await ctx.respond(f'Picked {reqDict["title"]} (*{reqDict["year"]}*) by **{reqDict["user_name"]}**')
 
 
 # Initalize the bot
