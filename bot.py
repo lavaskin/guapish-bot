@@ -4,6 +4,7 @@ import discord
 import os
 from dotenv import load_dotenv
 from firebase_admin import credentials, firestore, initialize_app
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 
 ALLOWED_ROLLERS = ['148907812670406656', '373724550350897154', '289947773183197185']
@@ -119,9 +120,9 @@ async def roll(ctx):
 	
 	# Get all requests that are not picked and not from the last picker (if it crashes the bot will pick skip)
 	try:
-		reqs = ref.where('picked', '==', False).where('user_id', '!=', metadata['last_id']).stream()
+		reqs = ref.where(filter=FieldFilter('picked', '==', False)).where(filter=FieldFilter('user_id', '!=', metadata['last_id'])).stream()
 		requests = [doc for doc in reqs]
-	except Exception as e:
+	except:
 		await ctx.respond('There are no valid requests at the moment.')
 		return
 	
@@ -131,10 +132,9 @@ async def roll(ctx):
 	for req in requests:
 		reqDict = req.to_dict()
 		months = getMonthsSince(reqDict['date'])
-		if months > 0:
-			newRequests.extend([req] * months)
-		else:
-			newRequests.append(req)
+		# Append once and then x more times depending on time in the q
+		newRequests.append(req)
+		if months > 0: newRequests.extend([req] * months)
 	
 	# Pick a random request
 	pickedReq = random.choice(newRequests)
@@ -152,6 +152,7 @@ async def roll(ctx):
 	await ctx.respond(f'Picked {reqDict["title"]} (*{reqDict["year"]}*) by **{reqDict["user_name"]}**')
 
 
+####################
 # Initalize the bot
 if __name__ == '__main__':
 	# Check if token is valid
