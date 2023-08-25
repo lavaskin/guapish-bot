@@ -18,15 +18,27 @@ print(f'LOG > Dev Mode={str(_dev)}')
 # Firebase Setup
 _dbCred = credentials.Certificate('./firebase.json')
 COLLECTION = os.getenv('COLLECTION_DEV') if _dev else os.getenv('COLLECTION_PROD')
+METADATA = os.getenv('META_DEV') if _dev else os.getenv('META_PROD')
 initialize_app(_dbCred)
 DB = firestore.client()
 
 
+###################
 # Helper Functions
 def getRef() -> firestore.CollectionReference:
 	return DB.collection(COLLECTION)
+
+def getMeta() -> firestore.DocumentReference:
+	# Get the metadata document (the id is always 'meta')
+	return DB.collection(METADATA).document('meta')
+
+def getMonthsSince(date) -> int:
+	# Get the difference in months between two dates
+	now = datetime.now()
+	return (now.year - date.year) * 12 + (now.month - date.month)
 	
 
+############
 # Bot Setup
 bot = discord.Bot()
 
@@ -39,6 +51,7 @@ async def on_ready():
     print('LOG > Bot is ready!')
     
 
+###########
 # Commands
 @bot.slash_command(description='Request a given movie each month. Requests reset at the start of each month (PST).')
 async def request(ctx, title: str, year: int):
@@ -74,7 +87,7 @@ async def request(ctx, title: str, year: int):
 
 	await ctx.respond(f'Requested **{title} ({year})**!')
 
-@bot.slash_command(description='View the current movie request list.')
+@bot.slash_command(description='0View the current movie request list.')
 async def requests(ctx):
 	ref = getRef()
 
@@ -95,27 +108,45 @@ async def requests(ctx):
 async def roll(ctx):
 	user = str(ctx.author.id)
 	ref  = getRef()
+	# Get metadata
+	metaRef = getMeta()
+	metadata = metaRef.get().to_dict()
 
 	# Check if the user is in the allowed rollers list
 	if user not in ALLOWED_ROLLERS:
 		await ctx.respond('You are not allowed to use this command!')
 		return
 	
-	# Get all requests that are not picked
-	reqs = ref.where('picked', '==', False)
-	requests = [doc for doc in reqs.stream()]
-
-	if requests == []:
-		await ctx.respond('There are no requests at the moment.')
+	# Get all requests that are not picked and not from the last picker (if it crashes the bot will pick skip)
+	try:
+		reqs = ref.where('picked', '==', False).where('user_id', '!=', metadata['last_id']).stream()
+		requests = [doc for doc in reqs]
+	except Exception as e:
+		await ctx.respond('There are no valid requests at the moment.')
 		return
 	
+	# Multiply each request by the number of months since it was requested
+	# So if it's been up for 3 months, add 3 copies of it to the list
+	newRequests = []
+	for req in requests:
+		reqDict = req.to_dict()
+		months = getMonthsSince(reqDict['date'])
+		if months > 0:
+			newRequests.extend([req] * months)
+		else:
+			newRequests.append(req)
+	
 	# Pick a random request
-	pickedReq = random.choice(requests)
+	pickedReq = random.choice(newRequests)
 	reqDict = pickedReq.to_dict()
 
 	# Mark the request as picked
 	ref.document(pickedReq.id).update({
 		'picked': True
+	})
+	# Update the metadata of the last picker
+	metaRef.update({
+		'last_id': reqDict['user_id']
 	})
 
 	await ctx.respond(f'Picked {reqDict["title"]} (*{reqDict["year"]}*) by **{reqDict["user_name"]}**')
