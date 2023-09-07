@@ -67,7 +67,7 @@ async def request(ctx, title: str, year: int):
 		return
 
 	# Check if user already has a request by checking if any of the documents have the same user id in the 'user' field
-	existingReqs = [doc.to_dict() for doc in ref.where('user_id', '==', user).stream()]
+	existingReqs = [doc.to_dict() for doc in ref.where(filter=FieldFilter('user_id', '==', user)).stream()]
 	for req in existingReqs:
 		# Check if the request is from the same month
 		date = req['date']
@@ -93,7 +93,7 @@ async def requests(ctx):
 	ref = getRef()
 
 	# Get all requests that are not picked
-	reqs = [doc.to_dict() for doc in ref.where('picked', '==', False).stream()]
+	reqs = [doc.to_dict() for doc in ref.where(filter=FieldFilter('picked', '==', False)).stream()]
 	if reqs == []:
 		await ctx.respond('There are no requests at the moment.')
 		return
