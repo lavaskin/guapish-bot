@@ -86,17 +86,23 @@ async def request(ctx, title: str, year: int):
 		'picked': False,
 	})
 
-	await ctx.respond(f'Requested **{title} ({year})**!')
+	await ctx.respond(f':up_arrow: Requested **{title} ({year})**!')
 
-@bot.slash_command(description='0View the current movie request list.')
+@bot.slash_command(description='View the current movie request list.')
 async def requests(ctx):
 	ref = getRef()
 
 	# Get all requests that are not picked
-	reqs = [doc.to_dict() for doc in ref.where(filter=FieldFilter('picked', '==', False)).stream()]
-	if reqs == []:
+	reqs = ref.where(filter=FieldFilter('picked', '==', False)).stream()
+	rawRequests = [doc for doc in reqs]
+	if rawRequests == []:
 		await ctx.respond('There are no requests at the moment.')
 		return
+
+	# Turn them into a list of dictionaries
+	reqs = []
+	for req in rawRequests:
+		reqs.append(req.to_dict())
 	
 	# Build the response
 	res = 'Current Requests:\n'
@@ -149,7 +155,7 @@ async def roll(ctx):
 		'last_id': reqDict['user_id']
 	})
 
-	await ctx.respond(f'Picked {reqDict["title"]} (*{reqDict["year"]}*) by **{reqDict["user_name"]}**')
+	await ctx.respond(f':down_arrow: Picked {reqDict["title"]} (*{reqDict["year"]}*) by **{reqDict["user_name"]}**')
 
 
 ####################
