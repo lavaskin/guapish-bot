@@ -63,7 +63,12 @@ async def request(ctx, title: str, year: int):
 	# Check if the user has the Patreon role
 	roles = [str(role.id) for role in ctx.author.roles]
 	if PATREON_ROLE not in roles:
-		await ctx.respond('You must be a Patreon sub to use this command! Subscribe here:\n\t*https://www.patreon.com/GUAPISH*')
+		await ctx.respond('You must be a Patreon sub to use this command! Subscribe here:\n\t*https://www.patreon.com/GUAPISH*', ephemeral=True)
+		return
+	
+	# Check that the year is valid
+	if year < 1890 or year > now.year + 1:
+		await ctx.respond(f'Invalid year: **{year}**. Please enter one between 1890 and now.', ephemeral=True)
 		return
 
 	# Check if user already has a request by checking if any of the documents have the same user id in the 'user' field
@@ -73,7 +78,7 @@ async def request(ctx, title: str, year: int):
 		date = req['date']
 		if date.month == now.month and date.year == now.year:
 			month = date.strftime('%B')
-			await ctx.respond(f'You already have a request for {month}:\n\t*{req["title"]} ({req["year"]})*\nPlease wait until the next month to request again.')
+			await ctx.respond(f'You already have a request for {month}:\n\t*{req["title"]} ({req["year"]})*\nPlease wait until the next month to request again.', ephemeral=True)
 			return
 	
 	# Add the request to the database
@@ -109,7 +114,7 @@ async def requests(ctx):
 	for req in reqs:
 		res += f'\t• {req["title"]} (*{req["year"]}*) by **{req["user_name"]}**\n'
 	
-	await ctx.respond(res)
+	await ctx.respond(res, ephemeral=True)
 
 @bot.slash_command(description='Pick a given movie from the request list.')
 async def roll(ctx):
