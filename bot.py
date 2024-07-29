@@ -70,6 +70,9 @@ async def request(ctx, title: str, year: int):
 	if year < 1890 or year > now.year + 1:
 		await ctx.respond(f'Invalid year: **{year}**. Please enter one between 1890 and now.', ephemeral=True)
 		return
+	
+	# Log request Info
+	print(f'LOG > Requested by {ctx.author.name} ({user}): {title} ({year})')
 
 	# Check if user already has a request by checking if any of the documents have the same user id in the 'user' field
 	existingReqs = [doc.to_dict() for doc in ref.where(filter=FieldFilter('user_id', '==', user)).stream()]
