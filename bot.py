@@ -44,12 +44,14 @@ def getMonthsSince(date) -> int:
 bot = discord.Bot()
 
 @bot.event
-async def on_application_command_error(ctx):
-	print(f' ERR > \n{ctx}')
+async def on_application_command_error(ctx, error):
+	print(f' ERR ({ctx.command}) > {error}')
+
+	await ctx.respond('An error occured while processing your command...', ephemeral=True)
 
 @bot.event
 async def on_ready():
-    print('LOG > Bot is ready!')
+    print('LOG > Bot is ready!\n')
     
 
 ###########
@@ -101,22 +103,20 @@ async def requests(ctx):
 	ref = getRef()
 
 	# Get all requests that are not picked
-	reqs = ref.where(filter=FieldFilter('picked', '==', False)).stream()
-	rawRequests = [doc for doc in reqs]
-	if rawRequests == []:
+	rawRequests = ref.where(filter=FieldFilter('picked', '==', False)).stream()
+	reqs = [doc.to_dict() for doc in rawRequests]
+	if reqs == []:
 		await ctx.respond('There are no requests at the moment.')
 		return
 
-	# Turn them into a list of dictionaries
-	reqs = []
-	for req in rawRequests:
-		reqs.append(req.to_dict())
+	# Sort the movies by date requested
+	sortedReqs = sorted(reqs, key=lambda x: x['date'], reverse=True)
 	
 	# Build the response
-	res = 'Current Requests:\n'
-	for req in reqs:
-		res += f'\t• {req["title"]} (*{req["year"]}*) by **{req["user_name"]}**\n'
-	
+	res = ''
+	for req in sortedReqs:
+		res += f'- {req["title"]} ({req["year"]})\n'
+
 	await ctx.respond(res, ephemeral=True)
 
 @bot.slash_command(description='Pick a given movie from the request list.')
@@ -134,8 +134,8 @@ async def roll(ctx):
 	
 	# Get all requests that are not picked and not from the last picker (if it crashes the bot will pick skip)
 	try:
-		reqs = ref.where(filter=FieldFilter('picked', '==', False)).where(filter=FieldFilter('user_id', '!=', metadata['last_id'])).stream()
-		requests = [doc for doc in reqs]
+		rawRequests = ref.where(filter=FieldFilter('picked', '==', False)).where(filter=FieldFilter('user_id', '!=', metadata['last_id'])).stream()
+		reqs = [doc for doc in rawRequests]
 	except:
 		await ctx.respond('There are no valid requests at the moment.')
 		return
@@ -143,7 +143,7 @@ async def roll(ctx):
 	# Multiply each request by the number of months since it was requested
 	# So if it's been up for 3 months, add 3 copies of it to the list
 	newRequests = []
-	for req in requests:
+	for req in reqs:
 		reqDict = req.to_dict()
 		months = getMonthsSince(reqDict['date'])
 		# Append once and then x more times depending on time in the q
