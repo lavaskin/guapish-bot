@@ -153,7 +153,7 @@ async def myrequests(ctx):
 		await ctx.respond('You have no current requests!', ephemeral=True)
 		return
 	
-	await ctx.respond(res, ephemeral=True)
+	await ctx.respond(res)
 
 
 @bot.slash_command(description='Pick a given movie from the request list.')
