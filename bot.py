@@ -37,6 +37,18 @@ def getMonthsSince(date) -> int:
 	# Get the difference in months between two dates
 	now = datetime.now()
 	return (now.year - date.year) * 12 + (now.month - date.month)
+
+def getRequestEntries(request) -> int:
+	return getMonthsSince(request['date']) + 1
+
+def getRequests(ref):
+	# Get all requests that are not picked
+	rawRequests = ref.where(filter=FieldFilter('picked', '==', False)).stream()
+	reqs = [doc.to_dict() for doc in rawRequests]
+
+	# Sort the movies by date requested and return them
+	sortedReqs = sorted(reqs, key=lambda x: x['date'], reverse=True)
+	return sortedReqs
 	
 
 ############
@@ -102,22 +114,47 @@ async def request(ctx, title: str, year: int):
 async def requests(ctx):
 	ref = getRef()
 
-	# Get all requests that are not picked
-	rawRequests = ref.where(filter=FieldFilter('picked', '==', False)).stream()
-	reqs = [doc.to_dict() for doc in rawRequests]
-	if reqs == []:
-		await ctx.respond('There are no requests at the moment.')
-		return
-
-	# Sort the movies by date requested
-	sortedReqs = sorted(reqs, key=lambda x: x['date'], reverse=True)
+	# Get requests
+	reqs = getRequests(ref)
 	
 	# Build the response
 	res = ''
-	for req in sortedReqs:
+	for req in reqs:
 		res += f'- {req["title"]} ({req["year"]})\n'
 
 	await ctx.respond(res, ephemeral=True)
+
+@bot.slash_command(description='View all your current requests, as well as their percent chance of being picked.')
+async def myrequests(ctx):
+	ref = getRef()
+	uid = str(ctx.author.id)
+
+	# Get requests
+	reqs = getRequests(ref)
+	res = ''
+
+	# Calculate the pick percentage chance for each movie
+	# This is done by first finding out how many total movies there are by getting their additive value from being in queue a long time
+	# Then taking that to do a generic % calc
+	totalEntries = 0
+	for req in reqs:
+		# Get how long it's been in q to add more entries for it (the +1 is movies that got requested this month are 0)
+		totalEntries += getRequestEntries(req)
+	# Loop again to calc % chance
+	for req in reqs:
+		# Skip non user requests
+		if req['user_id'] == uid:
+			entries = getRequestEntries(req)
+			percent = round((entries / totalEntries) * 100, 1)
+			res += f'- {req["title"]} ({req["year"]}) [{percent}%]\n'
+	
+	# Check if there were any requests
+	if res == '':
+		await ctx.respond('You have no current requests!', ephemeral=True)
+		return
+	
+	await ctx.respond(res, ephemeral=True)
+
 
 @bot.slash_command(description='Pick a given movie from the request list.')
 async def roll(ctx):
@@ -129,7 +166,7 @@ async def roll(ctx):
 
 	# Check if the user is in the allowed rollers list
 	if user not in ALLOWED_ROLLERS:
-		await ctx.respond('You are not allowed to use this command!')
+		await ctx.respond('You are not allowed to use this command!', ephemeral=True)
 		return
 	
 	# Get all requests that are not picked and not from the last picker (if it crashes the bot will pick skip)
