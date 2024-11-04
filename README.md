@@ -2,7 +2,7 @@
 
 A bot for the GUAPISH podcast Discord server. Used for general informaation as well as the movie requesting system.
 
-To join the Discord server, subscribe to the [GUAPISH Patreon](https://www.patreon.com/GUAPISH/posts).
+To join the Discord server, subscribe to the [GUAPISH Patreon](https://www.patreon.com/GUAPISH).
 
 ## Commands
 
