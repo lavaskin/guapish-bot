@@ -141,11 +141,13 @@ async def myrequests(ctx):
 		# Get how long it's been in q to add more entries for it (the +1 is movies that got requested this month are 0)
 		totalEntries += getRequestEntries(req)
 	# Loop again to calc % chance
+	total_chance = 0
 	for req in reqs:
 		# Skip non user requests
 		if req['user_id'] == uid:
 			entries = getRequestEntries(req)
 			percent = round((entries / totalEntries) * 100, 1)
+			total_chance += percent
 			res += f'- {req["title"]} ({req["year"]}) [{percent}%]\n'
 	
 	# Check if there were any requests
@@ -153,6 +155,8 @@ async def myrequests(ctx):
 		await ctx.respond('You have no current requests!', ephemeral=True)
 		return
 	
+	# Add the combined total and send it
+	res += f'**Combined Chance**: {round(total_chance, 1)}%'
 	await ctx.respond(res)
 
 
