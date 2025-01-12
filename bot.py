@@ -195,7 +195,7 @@ async def roll(ctx):
 	pickedReq = random.choice(newRequests)
 	reqDict = pickedReq.to_dict()
 
-	print(f'LOG > "{user}" picked {reqDict["year"]} ({reqDict["year"]})')
+	print(f'LOG > Rolled {reqDict["title"]} ({reqDict["year"]})')
 
 	# Mark the request as picked
 	ref.document(pickedReq.id).update({
