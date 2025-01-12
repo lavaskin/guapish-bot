@@ -148,7 +148,7 @@ async def myrequests(ctx):
 			entries = getRequestEntries(req)
 			percent = round((entries / totalEntries) * 100, 1)
 			total_chance += percent
-			res += f'- {req["title"]} ({req["year"]}) [{percent}%]\n'
+			res = f'1. {req["title"]} ({req["year"]}) [{percent}%]\n' + res
 	
 	# Check if there were any requests
 	if res == '':
