@@ -39,7 +39,10 @@ def getMonthsSince(date) -> int:
 	return (now.year - date.year) * 12 + (now.month - date.month)
 
 def getRequestEntries(request) -> int:
-	return getMonthsSince(request['date']) + 1
+	months = getMonthsSince(request['date'])
+	if months >= 12:
+		months += ((months - 12) * 2)
+	return months + 1 # +1 for the default entry
 
 def getRequests(ref):
 	# Get all requests that are not picked
@@ -181,15 +184,11 @@ async def roll(ctx):
 		await ctx.respond('There are no valid requests at the moment.')
 		return
 	
-	# Multiply each request by the number of months since it was requested
-	# So if it's been up for 3 months, add 3 copies of it to the list
+	# Add extra entires for movies that have been in the queue longer
 	newRequests = []
 	for req in reqs:
-		reqDict = req.to_dict()
-		months = getMonthsSince(reqDict['date'])
-		# Append once and then x more times depending on time in the q
-		newRequests.append(req)
-		if months > 0: newRequests.extend([req] * months)
+		entries = getRequestEntries(req)
+		newRequests.extend([req] * entries)
 	
 	# Pick a random request
 	pickedReq = random.choice(newRequests)
