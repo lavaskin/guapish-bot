@@ -9,6 +9,7 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 
 ALLOWED_ROLLERS = ['148907812670406656', '373724550350897154', '289947773183197185']
 
+
 # Load in env variables
 load_dotenv()
 _env = os.getenv('DEV_MODE', 'True')
@@ -187,7 +188,8 @@ async def roll(ctx):
 	# Add extra entires for movies that have been in the queue longer
 	newRequests = []
 	for req in reqs:
-		entries = getRequestEntries(req)
+		reqDict = req.to_dict()
+		entries = getRequestEntries(reqDict)
 		newRequests.extend([req] * entries)
 	
 	# Pick a random request
