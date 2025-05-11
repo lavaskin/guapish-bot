@@ -149,10 +149,11 @@ async def myrequests(ctx):
 	for req in reqs:
 		# Skip non user requests
 		if req['user_id'] == uid:
+			months = getMonthsSince(req['date'])
 			entries = getRequestEntries(req)
 			percent = round((entries / totalEntries) * 100, 1)
 			total_chance += percent
-			res = f'1. {req["title"]} ({req["year"]}) [{percent}%]\n' + res
+			res = f'1. {req["title"]} ({req["year"]}) [{percent}%, {months} months]\n' + res
 	
 	# Check if there were any requests
 	if res == '':
