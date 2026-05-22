@@ -1,86 +1,40 @@
-from datetime import datetime
 import random
-import discord
-import os
-from dotenv import load_dotenv
-from firebase_admin import credentials, firestore, initialize_app
+from datetime import datetime
+
+from src.helpers import create_bot, get_all_requests, get_months_since, get_request_entries
+
 from google.cloud.firestore_v1.base_query import FieldFilter
 
 
 ALLOWED_ROLLERS = ['148907812670406656', '373724550350897154', '289947773183197185']
 
 
-# Load in env variables
-load_dotenv()
-_env = os.getenv('DEV_MODE', 'True')
-_dev = True if _env == 'True' else False
-PATREON_ROLE = os.getenv('ROLE_DEV') if _dev else os.getenv('ROLE_PROD')
-print(f'LOG > Dev Mode={str(_dev)}')
-
-# Firebase Setup
-_dbCred = credentials.Certificate('./firebase.json')
-COLLECTION = os.getenv('COLLECTION_DEV') if _dev else os.getenv('COLLECTION_PROD')
-METADATA = os.getenv('META_DEV') if _dev else os.getenv('META_PROD')
-initialize_app(_dbCred)
-DB = firestore.client()
-
-
-###################
-# Helper Functions
-def getRef() -> firestore.CollectionReference:
-	return DB.collection(COLLECTION)
-
-def getMeta() -> firestore.DocumentReference:
-	# Get the metadata document (the id is always 'meta')
-	return DB.collection(METADATA).document('meta')
-
-def getMonthsSince(date) -> int:
-	# Get the difference in months between two dates
-	now = datetime.now()
-	return (now.year - date.year) * 12 + (now.month - date.month)
-
-def getRequestEntries(request) -> int:
-	months = getMonthsSince(request['date'])
-	if months >= 12:
-		months += ((months - 12) * 2)
-	return months + 1 # +1 for the default entry
-
-def get_all_requests(ref):
-	# Get all requests that are not picked
-	rawRequests = ref.where(filter=FieldFilter('picked', '==', False)).stream()
-	reqs = [doc.to_dict() for doc in rawRequests]
-
-	# Sort the movies by date requested and return them
-	sortedReqs = sorted(reqs, key=lambda x: x['date'], reverse=True)
-	return sortedReqs
-	
-
-############
-# Bot Setup
-bot = discord.Bot()
+#############
+# Bot Setup #
+bot = create_bot()
 
 @bot.event
 async def on_application_command_error(ctx, error):
 	print(f' ERR ({ctx.command}) > {error}')
 
-	await ctx.respond('An error occured while processing your command...', ephemeral=True)
+	await ctx.respond('An error occurred while processing your command...', ephemeral=True)
 
 @bot.event
 async def on_ready():
-    print('LOG > Bot is ready!\n')
+    print('LOG > Bot Running\n')
     
 
-###########
-# Commands
+############
+# Commands #
 @bot.slash_command(description='Request a given movie each month. Requests reset at the start of each month (PST).')
 async def request(ctx, title: str, year: int):
 	user = str(ctx.author.id)
-	ref  = getRef()
+	ref = bot.firebase_config.get_requests_ref()
 	now = datetime.now()
 
 	# Check if the user has the Patreon role
 	roles = [str(role.id) for role in ctx.author.roles]
-	if PATREON_ROLE not in roles:
+	if bot.app_config.patreon_role not in roles:
 		await ctx.respond('You must be a Patreon sub to use this command! Subscribe here:\n\t*https://www.patreon.com/GUAPISH*', ephemeral=True)
 		return
 	
@@ -117,7 +71,7 @@ async def request(ctx, title: str, year: int):
 
 @bot.slash_command(description='View the current movie request list.')
 async def requests(ctx):
-	ref = getRef()
+	ref = bot.firebase_config.get_requests_ref()
 
 	# Get requests
 	requests = get_all_requests(ref)
@@ -129,9 +83,9 @@ async def requests(ctx):
 
 	await ctx.respond(res, ephemeral=True)
 
-@bot.slash_command(description='View all your current requests, as well as their percent chance of being picked.')
-async def myrequests(ctx):
-	ref = getRef()
+@bot.slash_command(name='myrequests', description='View all your current requests, as well as their percent chance of being picked.')
+async def my_requests(ctx):
+	ref = bot.firebase_config.get_requests_ref()
 	uid = str(ctx.author.id)
 
 	# Get requests
@@ -144,14 +98,14 @@ async def myrequests(ctx):
 	totalEntries = 0
 	for req in requests:
 		# Get how long it's been in q to add more entries for it (the +1 is movies that got requested this month are 0)
-		totalEntries += getRequestEntries(req)
+		totalEntries += get_request_entries(req)
 	# Loop again to calc % chance
 	total_chance = 0
 	for req in requests:
 		# Skip non user requests
 		if req['user_id'] == uid:
-			months = getMonthsSince(req['date'])
-			entries = getRequestEntries(req)
+			months = get_months_since(req['date'])
+			entries = get_request_entries(req)
 			percent = round((entries / totalEntries) * 100, 1)
 			total_chance += percent
 			res = f'1. {req["title"]} ({req["year"]}) [{percent}%, {months} months]\n' + res
@@ -166,13 +120,13 @@ async def myrequests(ctx):
 	await ctx.respond(res)
 
 
-@bot.slash_command(description='Pick a given movie from the request list.')
+@bot.slash_command(name='roll', description='Pick a given movie from the request list.')
 async def roll(ctx):
 	user = str(ctx.author.id)
-	ref  = getRef()
-	# Get metadata
-	metaRef = getMeta()
-	metadata = metaRef.get().to_dict()
+
+	ref  = bot.firebase_config.get_requests_ref()
+	metaRef = bot.firebase_config.get_metadata_doc()
+	metadata = bot.firebase_config.get_metadata()
 
 	# Check if the user is in the allowed rollers list
 	if user not in ALLOWED_ROLLERS:
@@ -182,16 +136,16 @@ async def roll(ctx):
 	# Get all requests that are not picked and not from the last picker (if it crashes the bot will pick skip)
 	try:
 		rawRequests = ref.where(filter=FieldFilter('picked', '==', False)).where(filter=FieldFilter('user_id', '!=', metadata['last_id'])).stream()
-		reqs = [doc for doc in rawRequests]
+		requests = [doc for doc in rawRequests]
 	except:
 		await ctx.respond('There are no valid requests at the moment.')
 		return
 	
 	# Add extra entires for movies that have been in the queue longer
 	newRequests = []
-	for req in reqs:
+	for req in requests:
 		reqDict = req.to_dict()
-		entries = getRequestEntries(reqDict)
+		entries = get_request_entries(reqDict)
 		newRequests.extend([req] * entries)
 	
 	# Pick a random request
@@ -212,16 +166,16 @@ async def roll(ctx):
 	await ctx.respond(f':down_arrow: Picked {reqDict["title"]} (*{reqDict["year"]}*) by **{reqDict["user_name"]}**')
 
 
-####################
-# Initalize the bot
+######################
+# App Initialization #
 if __name__ == '__main__':
 	# Check if token is valid
-	token = os.getenv('BOT_TOKEN_DEV') if _dev else os.getenv('BOT_TOKEN_PROD')
+	token = bot.app_config.bot_token
 	if token is None:
 		print(' ERR > Token is invalid!')
-		exit()
+		exit(1)
 
-	# Start the bot, catch CTRL+C
+	# Start the bot & catch CTRL+C
 	try:
 		bot.run(token)
 	except KeyboardInterrupt:
