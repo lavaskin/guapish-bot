@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "movie-request-bot"
+name = "guapish-bot"
 version = "0.1.0"
 description = ""
 authors = ["lavaskin <lavaskin@gmail.com>"]
