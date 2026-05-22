@@ -1,7 +1,8 @@
 import random
 from datetime import datetime
 
-from src.helpers import create_bot, get_all_requests, get_months_since, get_request_entries
+from src.helpers import build_request_pages, create_bot, get_all_requests, get_months_since, get_request_entries, render_requests_page
+from src.models.pagination_view import PaginationView
 
 from google.cloud.firestore_v1.base_query import FieldFilter
 
@@ -75,13 +76,19 @@ async def all_requests(ctx):
 
 	# Get requests
 	requests = get_all_requests(ref)
-	
-	# Build the response
-	res = ''
-	for req in requests:
-		res += f'- {req["title"]} ({req["year"]})\n'
+	if not requests:
+		await ctx.respond('There are no current requests in the raffle.', ephemeral=True)
+		return
 
-	await ctx.respond(res, ephemeral=True)
+	pages = build_request_pages(requests)
+	view = PaginationView(
+		pages,
+		ctx.author.id,
+		render_requests_page,
+		unauthorized_message='Only the person who opened this request list can change pages.',
+	)
+	await ctx.respond(view.render_current_page(), view=view, ephemeral=True)
+	view.message = await ctx.interaction.original_response()
 
 @bot.slash_command(name='myrequests', description='View all your current requests, as well as their percent chance of being picked.')
 async def my_requests(ctx):
