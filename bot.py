@@ -1,4 +1,5 @@
 import random
+import discord
 from datetime import datetime
 
 from src.helpers import build_request_pages, create_bot, get_all_requests, get_months_since, get_request_entries, render_requests_page
@@ -71,11 +72,14 @@ async def request(ctx, title: str, year: int):
 	await ctx.respond(f':up_arrow: Requested **{title} ({year})**!')
 
 @bot.slash_command(name='requests', description='View all the movies currently requested in the raffle.')
-async def all_requests(ctx):
+async def all_requests(
+	ctx,
+	sort: str = discord.Option(description='Sort requests by date added.', choices=['asc', 'desc'], default='desc'),
+):
 	ref = bot.firebase_config.get_requests_ref()
 
 	# Get requests
-	requests = get_all_requests(ref)
+	requests = get_all_requests(ref, sort)
 	if not requests:
 		await ctx.respond('There are no current requests in the raffle.', ephemeral=True)
 		return

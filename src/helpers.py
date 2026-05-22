@@ -28,13 +28,14 @@ def get_request_entries(request) -> int:
 		months += ((months - 12) * 2)
 	return months + 1 # +1 for the default entry
 
-def get_all_requests(ref):
+def get_all_requests(ref, sort_direction: str = 'desc'):
 	# Get all requests that are not picked
 	raw_requests = ref.where(filter=FieldFilter('picked', '==', False)).stream()
 	requests = [doc.to_dict() for doc in raw_requests]
 
 	# Sort the movies by date requested and return them
-	sorted_requests = sorted(requests, key=lambda x: x['date'], reverse=True)
+	reverse = sort_direction.lower() != 'asc'
+	sorted_requests = sorted(requests, key=lambda x: x['date'], reverse=reverse)
 	return sorted_requests
 
 def render_requests_page(page: str, page_index: int, total_pages: int) -> str:
