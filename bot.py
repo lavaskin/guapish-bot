@@ -26,7 +26,7 @@ async def on_ready():
 
 ############
 # Commands #
-@bot.slash_command(description='Request a given movie each month. Requests reset at the start of each month (PST).')
+@bot.slash_command(description='Requests movie for the month. Requests reset at the start of each month (US/Central Time).')
 async def request(ctx, title: str, year: int):
 	user = str(ctx.author.id)
 	ref = bot.firebase_config.get_requests_ref()
@@ -69,8 +69,8 @@ async def request(ctx, title: str, year: int):
 
 	await ctx.respond(f':up_arrow: Requested **{title} ({year})**!')
 
-@bot.slash_command(description='View the current movie request list.')
-async def requests(ctx):
+@bot.slash_command(name='requests', description='View all the movies currently requested in the raffle.')
+async def all_requests(ctx):
 	ref = bot.firebase_config.get_requests_ref()
 
 	# Get requests
@@ -120,7 +120,7 @@ async def my_requests(ctx):
 	await ctx.respond(res)
 
 
-@bot.slash_command(name='roll', description='Pick a given movie from the request list.')
+@bot.slash_command(name='roll', description='Draws a movie request from the raffle. Only usable by certain users.')
 async def roll(ctx):
 	user = str(ctx.author.id)
 
