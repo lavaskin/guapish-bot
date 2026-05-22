@@ -10,3 +10,10 @@ To join the Discord server, subscribe to the [GUAPISH Patreon](https://www.patre
 - `/request <title> <year>`: Requests a given movie for the current month. Only allowed 1 request per month. Only usable by users with the Patreon role.
 - `/requests`: Prints all the current movie requests.
 - `/myrequests`: Prints all of the users requested movies and their % chance of being picked with the roll command.
+
+## Setup
+
+- Install the dependencies with poetry using ```poetry install```.
+- Fill out the needed fields referenced in ```.env-example.txt``` in a new ```.env``` file.
+- Get a ```firebase.json``` file from your Firebase app to hookup to Firestore with.
+- Run the app with poetry, or using the included ```./run``` script.
