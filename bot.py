@@ -45,7 +45,7 @@ def getRequestEntries(request) -> int:
 		months += ((months - 12) * 2)
 	return months + 1 # +1 for the default entry
 
-def getRequests(ref):
+def get_all_requests(ref):
 	# Get all requests that are not picked
 	rawRequests = ref.where(filter=FieldFilter('picked', '==', False)).stream()
 	reqs = [doc.to_dict() for doc in rawRequests]
@@ -88,20 +88,21 @@ async def request(ctx, title: str, year: int):
 	if year < 1890 or year > now.year + 1:
 		await ctx.respond(f'Invalid year: **{year}**. Please enter one between 1890 and now.', ephemeral=True)
 		return
-	
-	# Log request Info
-	print(f'LOG > Requested by {ctx.author.name} ({user}): {title} ({year})')
 
 	# Check if user already has a request by checking if any of the documents have the same user id in the 'user' field
-	existingReqs = [doc.to_dict() for doc in ref.where(filter=FieldFilter('user_id', '==', user)).stream()]
-	for req in existingReqs:
+	existing_requests = [doc.to_dict() for doc in ref.where(filter=FieldFilter('user_id', '==', user)).stream()]
+	for req in existing_requests:
 		# Check if the request is from the same month
 		date = req['date']
 		if date.month == now.month and date.year == now.year:
+			print(f'LOG > Double Request: {ctx.author.name} already requested \"{req["title"]} ({req["year"]})\"')
 			month = date.strftime('%B')
 			await ctx.respond(f'You already have a request for {month}:\n\t*{req["title"]} ({req["year"]})*\nPlease wait until the next month to request again.', ephemeral=True)
 			return
 	
+	# Log request Info
+	print(f'LOG > Requested by {ctx.author.name} ({user}): {title} ({year})')
+
 	# Add the request to the database
 	ref.add({
 		'user_id': user,
@@ -119,11 +120,11 @@ async def requests(ctx):
 	ref = getRef()
 
 	# Get requests
-	reqs = getRequests(ref)
+	requests = get_all_requests(ref)
 	
 	# Build the response
 	res = ''
-	for req in reqs:
+	for req in requests:
 		res += f'- {req["title"]} ({req["year"]})\n'
 
 	await ctx.respond(res, ephemeral=True)
@@ -134,19 +135,19 @@ async def myrequests(ctx):
 	uid = str(ctx.author.id)
 
 	# Get requests
-	reqs = getRequests(ref)
+	requests = get_all_requests(ref)
 	res = ''
 
 	# Calculate the pick percentage chance for each movie
 	# This is done by first finding out how many total movies there are by getting their additive value from being in queue a long time
 	# Then taking that to do a generic % calc
 	totalEntries = 0
-	for req in reqs:
+	for req in requests:
 		# Get how long it's been in q to add more entries for it (the +1 is movies that got requested this month are 0)
 		totalEntries += getRequestEntries(req)
 	# Loop again to calc % chance
 	total_chance = 0
-	for req in reqs:
+	for req in requests:
 		# Skip non user requests
 		if req['user_id'] == uid:
 			months = getMonthsSince(req['date'])
