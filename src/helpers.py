@@ -3,6 +3,8 @@ from datetime import datetime
 from src.models.app_config import AppConfig
 from src.models.firebase_config import FirebaseConfig
 from src.models.guapish_bot import GuapishBot
+from src.models.metadata_model import MetadataModel
+from src.models.movie_request_model import MovieRequestModel
 
 from google.cloud.firestore_v1.base_query import FieldFilter
 
@@ -22,8 +24,8 @@ def get_months_since(date) -> int:
 	now = datetime.now()
 	return (now.year - date.year) * 12 + (now.month - date.month)
 
-def get_request_entries(request) -> int:
-	months = get_months_since(request['date'])
+def get_request_entries(request: MovieRequestModel) -> int:
+	months = get_months_since(request.date)
 	if months >= 12:
 		months += ((months - 12) * 2)
 	return months + 1 # +1 for the default entry
@@ -34,34 +36,38 @@ def get_all_requests_base(ref):
 def get_all_requests(ref, sort_direction: str = 'desc'):
 	# Get all requests that are not picked
 	raw_requests = get_all_requests_base(ref).stream()
-	requests = [doc.to_dict() for doc in raw_requests]
+	requests = [MovieRequestModel.from_snapshot(doc) for doc in raw_requests]
 
 	# Sort the movies by date requested and return them
 	reverse = sort_direction.lower() != 'asc'
-	sorted_requests = sorted(requests, key=lambda x: x['date'], reverse=reverse)
+	sorted_requests = sorted(requests, key=lambda request: request.date, reverse=reverse)
 	return sorted_requests
 
-def get_eligible_requests(ref, metadata) -> list[dict]:
+def get_eligible_requests(ref, metadata: MetadataModel) -> list[MovieRequestModel]:
 	# Get all requests that are not picked and not from the last requester
-	raw_requests = get_all_requests_base(ref).where(filter=FieldFilter('user_id', '!=', metadata['last_id'])).stream()
-	requests = [doc.to_dict() for doc in raw_requests]
+	query = get_all_requests_base(ref)
+	last_id = metadata.last_id
+	if last_id:
+		query = query.where(filter=FieldFilter('user_id', '!=', last_id))
+	raw_requests = query.stream()
+	requests = [MovieRequestModel.from_snapshot(doc) for doc in raw_requests]
 
 	# Sort the movies by date requested and return them
-	sorted_requests = sorted(requests, key=lambda x: x['date'])
+	sorted_requests = sorted(requests, key=lambda request: request.date)
 	return sorted_requests
 
 def render_requests_page(page: str, page_index: int, total_pages: int) -> str:
 	header = f'**Current Raffle Requests ({page_index + 1}/{total_pages})**'
 	return f'{header}\n{page}'
 
-def format_request_line(request: dict, index: int) -> str:
-	title = request['title']
+def format_request_line(request: MovieRequestModel, index: int) -> str:
+	title = request.title
 	if len(title) > REQUEST_TITLE_MAX_CHARS:
 		title = title[:REQUEST_TITLE_MAX_CHARS - 3].rstrip() + '...'
 
-	return f'{index}. {title} ({request["year"]})'
+	return f'{index}. {title} ({request.year})'
 
-def build_request_pages(requests: list[dict]) -> list[str]:
+def build_request_pages(requests: list[MovieRequestModel]) -> list[str]:
 	pages: list[str] = []
 	page_lines: list[str] = []
 	page_chars = 0

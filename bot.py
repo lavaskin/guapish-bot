@@ -2,7 +2,8 @@ import random
 import discord
 from datetime import datetime
 
-from src.helpers import build_request_pages, create_bot, get_all_requests, get_months_since, get_request_entries, render_requests_page
+from src.helpers import build_request_pages, create_bot, get_all_requests, get_eligible_requests, get_months_since, get_request_entries, render_requests_page
+from src.models.movie_request_model import MovieRequestModel
 from src.models.pagination_view import PaginationView
 
 from google.cloud.firestore_v1.base_query import FieldFilter
@@ -46,28 +47,29 @@ async def request(ctx, title: str, year: int):
 		return
 
 	# Check if user already has a request by checking if any of the documents have the same user id in the 'user' field
-	existing_requests = [doc.to_dict() for doc in ref.where(filter=FieldFilter('user_id', '==', user)).stream()]
+	existing_requests = [MovieRequestModel.from_snapshot(doc) for doc in ref.where(filter=FieldFilter('user_id', '==', user)).stream()]
 	for req in existing_requests:
 		# Check if the request is from the same month
-		date = req['date']
+		date = req.date
 		if date.month == now.month and date.year == now.year:
-			print(f'LOG > Double Request: {ctx.author.name} already requested \"{req["title"]} ({req["year"]})\"')
+			print(f'LOG > Double Request: {ctx.author.name} already requested \"{req.title} ({req.year})\"')
 			month = date.strftime('%B')
-			await ctx.respond(f'You already have a request for {month}:\n\t*{req["title"]} ({req["year"]})*\nPlease wait until the next month to request again.', ephemeral=True)
+			await ctx.respond(f'You already have a request for {month}:\n\t*{req.title} ({req.year})*\nPlease wait until the next month to request again.', ephemeral=True)
 			return
 	
 	# Log request Info
 	print(f'LOG > Requested by {ctx.author.name} ({user}): {title} ({year})')
 
 	# Add the request to the database
-	ref.add({
-		'user_id': user,
-		'user_name': ctx.author.name,
-		'title': title,
-		'year': year,
-		'date': now,
-		'picked': False,
-	})
+	request = MovieRequestModel(
+		document_id=None,
+		user_id=user,
+		user_name=ctx.author.name,
+		title=title,
+		year=year,
+		date=now,
+	)
+	ref.add(request.to_dict())
 
 	await ctx.respond(f':up_arrow: Requested **{title} ({year})**!')
 
@@ -95,31 +97,51 @@ async def all_requests(
 	view.message = await ctx.interaction.original_response()
 
 @bot.slash_command(name='myrequests', description='View all your current requests, as well as their percent chance of being picked.')
-async def my_requests(ctx):
+async def my_requests(
+	ctx,
+	factor_in_weekly_odds: str = discord.Option(default="false", choices=["true", "false"], description="More accurate calculation for chance of movies being picked week by week",
+),
+):
 	ref = bot.firebase_config.get_requests_ref()
 	uid = str(ctx.author.id)
 
+	factor_weekly_odds = factor_in_weekly_odds.lower() == "true"
+
 	# Get requests
-	requests = get_all_requests(ref)
+	requests = []
+
+	# Grab movies excluding the last picked users
+	# This comes at the cost of not showing anything for your movies if you were the last picker
+	if factor_weekly_odds:
+		metadata = bot.firebase_config.get_metadata()
+
+		# Check if the user was the last picker to not actually fetch all the movies
+		if metadata.last_id == uid:
+			requests = get_all_requests(ref)
+			factor_weekly_odds = False
+		else:
+			requests = get_eligible_requests(ref, metadata)
+	else:
+		requests = get_all_requests(ref)
 	res = ''
 
 	# Calculate the pick percentage chance for each movie
 	# This is done by first finding out how many total movies there are by getting their additive value from being in queue a long time
 	# Then taking that to do a generic % calc
-	totalEntries = 0
+	total_entries = 0
 	for req in requests:
 		# Get how long it's been in q to add more entries for it (the +1 is movies that got requested this month are 0)
-		totalEntries += get_request_entries(req)
+		total_entries += get_request_entries(req)
 	# Loop again to calc % chance
 	total_chance = 0
 	for req in requests:
 		# Skip non user requests
-		if req['user_id'] == uid:
-			months = get_months_since(req['date'])
+		if req.user_id == uid:
+			months = get_months_since(req.date)
 			entries = get_request_entries(req)
-			percent = round((entries / totalEntries) * 100, 1)
+			percent = round((entries / total_entries) * 100, 1)
 			total_chance += percent
-			res = f'1. {req["title"]} ({req["year"]}) [{percent}%, {months} months]\n' + res
+			res = f'1. {req.title} ({req.year}) [{percent}%, {months} months]\n' + res
 	
 	# Check if there were any requests
 	if res == '':
@@ -128,6 +150,7 @@ async def my_requests(ctx):
 	
 	# Add the combined total and send it
 	res += f'**Combined Chance**: {round(total_chance, 1)}%'
+	if factor_weekly_odds: res += ' *(Factoring in Weekly Odds)*'
 	await ctx.respond(res)
 
 
@@ -136,7 +159,7 @@ async def roll(ctx):
 	user = str(ctx.author.id)
 
 	ref  = bot.firebase_config.get_requests_ref()
-	metaRef = bot.firebase_config.get_metadata_doc()
+	meta_ref = bot.firebase_config.get_metadata_doc()
 	metadata = bot.firebase_config.get_metadata()
 
 	# Check if the user is in the allowed rollers list
@@ -146,35 +169,34 @@ async def roll(ctx):
 	
 	# Get all requests that are not picked and not from the last picker (if it crashes the bot will pick skip)
 	try:
-		rawRequests = ref.where(filter=FieldFilter('picked', '==', False)).where(filter=FieldFilter('user_id', '!=', metadata['last_id'])).stream()
-		requests = [doc for doc in rawRequests]
+		raw_requests = get_eligible_requests(ref, metadata)
+		requests = [doc for doc in raw_requests]
 	except:
 		await ctx.respond('There are no valid requests at the moment.')
 		return
 	
 	# Add extra entires for movies that have been in the queue longer
-	newRequests = []
+	new_requests = []
 	for req in requests:
-		reqDict = req.to_dict()
-		entries = get_request_entries(reqDict)
-		newRequests.extend([req] * entries)
+		entries = get_request_entries(req)
+		new_requests.extend([req] * entries)
 	
 	# Pick a random request
-	pickedReq = random.choice(newRequests)
-	reqDict = pickedReq.to_dict()
+	picked_request = random.choice(new_requests)
+	request_dict = picked_request.to_dict()
 
-	print(f'LOG > Rolled {reqDict["title"]} ({reqDict["year"]})')
+	print(f'LOG > Rolled {request_dict["title"]} ({request_dict["year"]})')
 
 	# Mark the request as picked
-	ref.document(pickedReq.id).update({
-		'picked': True
-	})
+	# ref.document(picked_request.document_id).update({
+	# 	'picked': True
+	# })
 	# Update the metadata of the last picker
-	metaRef.update({
-		'last_id': reqDict['user_id']
-	})
+	# meta_ref.update({
+	# 	'last_id': request_dict['user_id']
+	# })
 
-	await ctx.respond(f':down_arrow: Picked {reqDict["title"]} (*{reqDict["year"]}*) by **{reqDict["user_name"]}**')
+	await ctx.respond(f':down_arrow: Picked {request_dict["title"]} (*{request_dict["year"]}*) by **{request_dict["user_name"]}**')
 
 
 ######################

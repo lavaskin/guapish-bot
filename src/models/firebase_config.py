@@ -1,4 +1,5 @@
 from src.models.app_config import AppConfig
+from src.models.metadata_model import MetadataModel
 
 from firebase_admin import credentials, firestore, initialize_app
 
@@ -19,6 +20,6 @@ class FirebaseConfig:
 	def get_metadata_doc(self) -> firestore.DocumentReference:
 		return self.firestore.collection(self.metadata_collection).document('meta')
 	
-	def get_metadata(self) -> dict:
+	def get_metadata(self) -> MetadataModel:
 		doc = self.get_metadata_doc().get()
-		return doc.to_dict() if doc.exists else {}
+		return MetadataModel.from_snapshot(doc) if doc.exists else MetadataModel(document_id='meta')
