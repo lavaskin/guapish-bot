@@ -176,27 +176,26 @@ async def roll(ctx):
 		return
 	
 	# Add extra entires for movies that have been in the queue longer
-	new_requests = []
+	new_requests: list[MovieRequestModel] = []
 	for req in requests:
 		entries = get_request_entries(req)
 		new_requests.extend([req] * entries)
 	
 	# Pick a random request
 	picked_request = random.choice(new_requests)
-	request_dict = picked_request.to_dict()
 
-	print(f'LOG > Rolled {request_dict["title"]} ({request_dict["year"]})')
+	print(f'LOG > Rolled {picked_request.title} ({picked_request.year})')
 
 	# Mark the request as picked
-	# ref.document(picked_request.document_id).update({
-	# 	'picked': True
-	# })
+	ref.document(picked_request.document_id).update({
+		'picked': True
+	})
 	# Update the metadata of the last picker
-	# meta_ref.update({
-	# 	'last_id': request_dict['user_id']
-	# })
+	meta_ref.update({
+		'last_id': picked_request.user_id
+	})
 
-	await ctx.respond(f':down_arrow: Picked {request_dict["title"]} (*{request_dict["year"]}*) by **{request_dict["user_name"]}**')
+	await ctx.respond(f':down_arrow: Picked {picked_request.title} (*{picked_request.year}*) by **{picked_request.user_name}**')
 
 
 ######################
