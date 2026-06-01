@@ -43,7 +43,7 @@ def get_all_requests(ref, sort_direction: str = 'desc'):
 	sorted_requests = sorted(requests, key=lambda request: request.date, reverse=reverse)
 	return sorted_requests
 
-def get_eligible_requests(ref, metadata: MetadataModel) -> list[MovieRequestModel]:
+def get_eligible_requests(ref, metadata: MetadataModel, sort_direction: str = 'desc') -> list[MovieRequestModel]:
 	# Get all requests that are not picked and not from the last requester
 	query = get_all_requests_base(ref)
 	last_id = metadata.last_id
@@ -53,7 +53,8 @@ def get_eligible_requests(ref, metadata: MetadataModel) -> list[MovieRequestMode
 	requests = [MovieRequestModel.from_snapshot(doc) for doc in raw_requests]
 
 	# Sort the movies by date requested and return them
-	sorted_requests = sorted(requests, key=lambda request: request.date)
+	reverse = sort_direction.lower() != 'asc'
+	sorted_requests = sorted(requests, key=lambda request: request.date, reverse=reverse)
 	return sorted_requests
 
 def render_requests_page(page: str, page_index: int, total_pages: int) -> str:
