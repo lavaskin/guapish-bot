@@ -28,14 +28,26 @@ def get_request_entries(request) -> int:
 		months += ((months - 12) * 2)
 	return months + 1 # +1 for the default entry
 
+def get_all_requests_base(ref):
+	return ref.where(filter=FieldFilter('picked', '==', False))
+
 def get_all_requests(ref, sort_direction: str = 'desc'):
 	# Get all requests that are not picked
-	raw_requests = ref.where(filter=FieldFilter('picked', '==', False)).stream()
+	raw_requests = get_all_requests_base(ref).stream()
 	requests = [doc.to_dict() for doc in raw_requests]
 
 	# Sort the movies by date requested and return them
 	reverse = sort_direction.lower() != 'asc'
 	sorted_requests = sorted(requests, key=lambda x: x['date'], reverse=reverse)
+	return sorted_requests
+
+def get_eligible_requests(ref, metadata) -> list[dict]:
+	# Get all requests that are not picked and not from the last requester
+	raw_requests = get_all_requests_base(ref).where(filter=FieldFilter('user_id', '!=', metadata['last_id'])).stream()
+	requests = [doc.to_dict() for doc in raw_requests]
+
+	# Sort the movies by date requested and return them
+	sorted_requests = sorted(requests, key=lambda x: x['date'])
 	return sorted_requests
 
 def render_requests_page(page: str, page_index: int, total_pages: int) -> str:
