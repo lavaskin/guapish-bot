@@ -13,7 +13,7 @@ To join the Discord server, subscribe to the [GUAPISH Patreon](https://www.patre
 
 ## Setup
 
-- Install the dependencies with poetry using ```poetry install```.
+- Install the dependencies with poetry using ```poetry install``` (creates a project-local `.venv`).
 - Fill out the needed fields referenced in ```.env-example.txt``` in a new ```.env``` file.
 - Get a ```firebase.json``` file from your Firebase app to hookup to Firestore with.
-- Run the app with poetry, or using the included ```./run``` script.
+- Run with ```./run``` (uses `.venv/bin/python` directly).
