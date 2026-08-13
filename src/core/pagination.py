@@ -12,7 +12,7 @@ class PaginationView(discord.ui.View, Generic[PageItemT]):
 		self,
 		items: Sequence[PageItemT],
 		owner_id: int,
-		render_page: Callable[[PageItemT, int, int], str],
+		render_page: Callable[[PageItemT, int, int], str | discord.Embed],
 		*,
 		unauthorized_message: str = 'Only the person who opened this view can change pages.',
 		timeout: float = 300,
@@ -26,9 +26,15 @@ class PaginationView(discord.ui.View, Generic[PageItemT]):
 		self.message = None
 		self._sync_buttons()
 
-	def render_current_page(self) -> str:
+	def render_current_page(self) -> str | discord.Embed:
 		total_pages = len(self.items)
 		return self.render_page_content(self.items[self.current_page], self.current_page, total_pages)
+
+	def _page_edit_kwargs(self) -> dict:
+		page = self.render_current_page()
+		if isinstance(page, discord.Embed):
+			return {'content': None, 'embed': page, 'view': self}
+		return {'content': page, 'view': self}
 
 	def _sync_buttons(self) -> None:
 		previous_button = self.children[0]
@@ -57,7 +63,7 @@ class PaginationView(discord.ui.View, Generic[PageItemT]):
 
 		self.current_page -= 1
 		self._sync_buttons()
-		await interaction.response.edit_message(content=self.render_current_page(), view=self)
+		await interaction.response.edit_message(**self._page_edit_kwargs())
 
 	@discord.ui.button(label='Next', style=discord.ButtonStyle.secondary)
 	async def next_page(self, button: discord.ui.Button, interaction: discord.Interaction):
@@ -66,4 +72,4 @@ class PaginationView(discord.ui.View, Generic[PageItemT]):
 
 		self.current_page += 1
 		self._sync_buttons()
-		await interaction.response.edit_message(content=self.render_current_page(), view=self)
+		await interaction.response.edit_message(**self._page_edit_kwargs())
