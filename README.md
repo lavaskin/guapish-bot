@@ -27,13 +27,38 @@ To join the Discord server, subscribe to the [GUAPISH Patreon](https://www.patre
 ## Setup
 
 - Install FFmpeg and make sure `ffmpeg` is on your `PATH`.
-- Install the dependencies with poetry using ```poetry install``` (creates a project-local `.venv`).
+- Install the dependencies with poetry using ```poetry install```.
 - Fill out the needed fields referenced in ```.env-example.txt``` in a new ```.env``` file.
 - Get a ```firebase.json``` file from your Firebase app to hookup to Firestore with.
-- Run with ```./run``` (uses `.venv/bin/python` directly).
+- Run with ```./run``` (prefers a project-local `.venv`, otherwise falls back to the poetry env).
+
+`DEV_MODE` selects which set of `*_DEV` / `*_PROD` variables is used. It accepts
+`true/false`, `1/0`, `yes/no`, `on/off` in any case, and **fails fast on anything
+else** rather than silently falling back to production.
+
+## Tests
+
+The music player is concurrent (a background queue driver, two disconnect timers,
+downloads on worker threads), so it has an offline test suite. No Discord
+connection, Firebase credentials, ffmpeg or network access is required.
+
+```bash
+poetry install --with dev
+./test                    # everything
+./test -m 'not slow'      # skip the timing sweeps (~3s instead of ~15s)
+./test -k skip            # one area
+```
+
+- `tests/test_player.py` — queue driver: nothing is ever stranded
+- `tests/test_skip.py` — `/skip` reporting, including a timing sweep that
+  regression-tests skip-spam
+- `tests/test_extractor.py` — YouTube-only guard, duration/live limits, temp files
+- `tests/test_cog.py` — queue caps, alone detection, error reporting
+- `tests/test_config.py` — environment parsing
 
 ## Project structure
 
 - `bot.py` — process entry; loads shared events and feature cogs
 - `src/core/` — shared bot, config, firebase, pagination
 - `src/features/` — one package per feature; register new cogs in `FEATURES`
+- `tests/` — offline suite (`./test`)
