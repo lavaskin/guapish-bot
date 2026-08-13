@@ -11,7 +11,7 @@ for feature in FEATURES:
 
 if __name__ == '__main__':
 	token = bot.app_config.bot_token
-	if token is None:
+	if not token:
 		print(' ERR > Token is invalid!')
 		exit(1)
 
