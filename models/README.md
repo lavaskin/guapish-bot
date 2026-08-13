@@ -1,3 +1,3 @@
 # Models
 
-Directory for examples of the firestore document structure spec.
+Firestore document structure examples, grouped by feature.
