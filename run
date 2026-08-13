@@ -2,14 +2,16 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# systemd's PATH is minimal; poetry (pipx/official installer) lives here
+export PATH="${HOME}/.local/bin:${PATH}"
+
 if [ -x .venv/bin/python ]; then
   PYTHON=".venv/bin/python"
 elif command -v poetry >/dev/null 2>&1; then
   PYTHON="$(poetry env info -p)/bin/python"
 else
-  echo "No venv found. On the server: poetry config virtualenvs.in-project true && poetry install" >&2
+  echo "No venv found (PATH=$PATH). On the server: poetry config virtualenvs.in-project true && poetry install" >&2
   exit 1
 fi
 
-clear
 exec "$PYTHON" -u bot.py
