@@ -7,7 +7,7 @@ import discord
 
 from src.core.bot import GuapishBot
 from src.features.music.extractor import download_audio
-from src.features.music.helpers import disconnected_embed, playback_failed_embed
+from src.features.music.helpers import disconnected_embed, playback_failed_embed, playing_embed
 from src.features.music.track import Track
 
 
@@ -86,16 +86,16 @@ class GuildPlayer:
 			self._ensure_driver()
 			return should_start, len(self.queue)
 
-	def _ensure_driver(self):
+	def _ensure_driver(self, *, announce: bool = False):
 		"""Start the queue driver if one is not already running. Caller must hold self.lock."""
 		if self._driver_task is not None and not self._driver_task.done():
 			return
 
-		self._driver_task = asyncio.create_task(self._drive())
+		self._driver_task = asyncio.create_task(self._drive(announce=announce))
 
-	async def _drive(self):
+	async def _drive(self, announce: bool = False):
 		try:
-			await self._play_next()
+			await self._play_next(announce=announce)
 		except Exception as error:
 			print(f' ERR > driver: {error}')
 
@@ -215,7 +215,7 @@ class GuildPlayer:
 		if disconnect and voice_client.is_connected():
 			await voice_client.disconnect()
 
-	async def _play_next(self):
+	async def _play_next(self, announce: bool = False):
 		while True:
 			async with self.lock:
 				self._cancel_idle()
@@ -254,6 +254,7 @@ class GuildPlayer:
 				continue
 
 			dropped = False
+			started = False
 			async with self.lock:
 				if gen != self._play_gen:
 					_unlink(path)
@@ -275,10 +276,15 @@ class GuildPlayer:
 						self.started_at = datetime.now()
 						self.voice_client.play(source, after=lambda err, gen=gen: self._after(err, gen))
 						print(f'LOG > Playing {track.title} in guild {self.guild_id}')
-						return
+						started = True
 
 			if dropped:
 				await self._notify(disconnected_embed())
+				return
+
+			if started:
+				if announce:
+					await self._notify(playing_embed(track))
 				return
 
 			await self._notify(playback_failed_embed(track))
@@ -308,7 +314,7 @@ class GuildPlayer:
 				self.started_at = None
 				self.elapsed_offset = 0.0
 				self._cleanup_file()
-				self._ensure_driver()
+				self._ensure_driver(announce=True)
 
 			if failed and track is not None:
 				print(f' ERR > Playback failed for {track.title}: {error}')

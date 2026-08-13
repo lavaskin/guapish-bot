@@ -72,6 +72,14 @@ async def test_failed_downloads_skip_through_to_playable_track(make_player, make
 	assert player.current.title == 'good'
 
 
+class FakeTextChannel:
+	def __init__(self):
+		self.sent = []
+
+	async def send(self, content=None, *, embed=None):
+		self.sent.append(embed or content)
+
+
 async def test_track_end_chains_to_next_track(make_player, make_track):
 	player = make_player()
 	first, second = make_track('t1'), make_track('t2')
@@ -87,6 +95,43 @@ async def test_track_end_chains_to_next_track(make_player, make_track):
 	await settle(0.05)
 
 	assert player.current is second
+
+
+async def test_natural_advance_announces_now_playing(make_player, make_track):
+	player = make_player()
+	channel = FakeTextChannel()
+	player.text_channel = channel
+	first, second = make_track('t1'), make_track('t2')
+	await player.enqueue(first)
+	await player.enqueue(second)
+	await settle(0.05)
+	assert channel.sent == []
+
+	player.started_at = None
+	player.elapsed_offset = 99
+	await player._on_track_end(player._play_gen, None)
+	await settle(0.05)
+
+	assert player.current is second
+	assert len(channel.sent) == 1
+	assert channel.sent[0].author.name == 'Now Playing'
+	assert channel.sent[0].title == 't2'
+
+
+async def test_skip_does_not_announce_now_playing(make_player, make_track):
+	player = make_player()
+	channel = FakeTextChannel()
+	player.text_channel = channel
+	first, second = make_track('t1'), make_track('t2')
+	await player.enqueue(first)
+	await player.enqueue(second)
+	await settle(0.05)
+
+	await player.skip()
+	await settle(0.15)
+
+	assert player.current is second
+	assert channel.sent == []
 
 
 async def test_idle_timer_not_armed_while_disconnected(make_player):
