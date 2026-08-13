@@ -5,7 +5,18 @@ import discord
 from src.core.bot import GuapishBot
 from src.core.pagination import PaginationView
 from src.features.music.extractor import TrackExtractError, clear_cache, extract_track
-from src.features.music.helpers import build_queue_pages, format_duration, render_queue_page
+from src.features.music.helpers import (
+	build_queue_pages,
+	cleared_embed,
+	now_playing_embed,
+	paused_embed,
+	playing_embed,
+	queued_embed,
+	render_queue_page,
+	resumed_embed,
+	skipped_embed,
+	stopped_embed,
+)
 from src.features.music.player import GuildPlayer
 
 
@@ -158,11 +169,10 @@ class MusicCog(discord.Cog):
 		if should_start:
 			await player.wait_for_start()
 
-		duration = format_duration(track.duration)
 		if player.current is track:
-			await ctx.respond(f':notes: Playing **{track.title}** ({duration})')
+			await ctx.respond(embed=playing_embed(track))
 		elif not should_start:
-			await ctx.respond(f':notes: Queued **{track.title}** ({duration}) — position {position}')
+			await ctx.respond(embed=queued_embed(track, position))
 		else:
 			await ctx.respond('Could not play that track.')
 
@@ -177,7 +187,7 @@ class MusicCog(discord.Cog):
 			await ctx.respond('Nothing is playing.', ephemeral=True)
 			return
 
-		await ctx.respond(':pause_button: Paused.')
+		await ctx.respond(embed=paused_embed(player.current))
 
 	@discord.slash_command(description='Resume the current track.')
 	async def resume(self, ctx):
@@ -190,7 +200,7 @@ class MusicCog(discord.Cog):
 			await ctx.respond('Nothing is paused.', ephemeral=True)
 			return
 
-		await ctx.respond(':arrow_forward: Resumed.')
+		await ctx.respond(embed=resumed_embed(player.current))
 
 	@discord.slash_command(description='Skip the current track.')
 	async def skip(self, ctx):
@@ -207,21 +217,7 @@ class MusicCog(discord.Cog):
 			return
 
 		skipped, next_track, remaining = result
-		if next_track is None:
-			await ctx.respond(f':track_next: Skipped **{skipped.title}**. Queue is empty.')
-			return
-
-		if remaining == 0:
-			await ctx.respond(
-				f':track_next: Skipped **{skipped.title}**.\n'
-				f'Now playing **{next_track.title}** — last in queue.'
-			)
-			return
-
-		await ctx.respond(
-			f':track_next: Skipped **{skipped.title}**.\n'
-			f'Now playing **{next_track.title}** — {remaining} more in queue.'
-		)
+		await ctx.respond(embed=skipped_embed(skipped, next_track, remaining))
 
 	@discord.slash_command(description='Clear the queue. The current track keeps playing.')
 	async def clear(self, ctx):
@@ -235,7 +231,7 @@ class MusicCog(discord.Cog):
 			await ctx.respond('The queue is already empty.', ephemeral=True)
 			return
 
-		await ctx.respond(f'Cleared **{count}** track(s) from the queue.')
+		await ctx.respond(embed=cleared_embed(count, player.current))
 
 	@discord.slash_command(description='Stop playback, clear the queue, and leave voice.')
 	async def stop(self, ctx):
@@ -245,7 +241,7 @@ class MusicCog(discord.Cog):
 			return
 
 		await player.stop()
-		await ctx.respond(':stop_button: Stopped and left the voice channel.')
+		await ctx.respond(embed=stopped_embed())
 
 	@discord.slash_command(description='Show the current music queue.')
 	async def queue(self, ctx):
@@ -265,7 +261,7 @@ class MusicCog(discord.Cog):
 			render_queue_page,
 			unauthorized_message='Only the person who opened this queue can change pages.',
 		)
-		await ctx.respond(view.render_current_page(), view=view)
+		await ctx.respond(embed=view.render_current_page(), view=view)
 		view.message = await ctx.interaction.original_response()
 
 	@discord.slash_command(description='Show the track that is currently playing.')
@@ -279,10 +275,4 @@ class MusicCog(discord.Cog):
 			await ctx.respond('Nothing is playing.', ephemeral=True)
 			return
 
-		track = player.current
-		status = 'Paused' if player.is_paused else 'Playing'
-		await ctx.respond(
-			f':notes: **{track.title}**\n'
-			f'{format_duration(player.elapsed)} / {format_duration(track.duration)} — {status}\n'
-			f'Requested by {track.requester_name}'
-		)
+		await ctx.respond(embed=now_playing_embed(player.current, player.elapsed, player.is_paused))

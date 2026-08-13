@@ -87,6 +87,27 @@ def _extract_info(query: str) -> dict:
 		return info
 
 
+def _thumbnail(info: dict) -> str | None:
+	url = info.get('thumbnail')
+	if url:
+		return url
+
+	thumbs = info.get('thumbnails') or []
+	for thumb in reversed(thumbs):
+		thumb_url = thumb.get('url') if isinstance(thumb, dict) else None
+		if thumb_url:
+			return thumb_url
+
+	video_id = info.get('id')
+	if video_id:
+		return f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg'
+	return None
+
+
+def _uploader(info: dict) -> str | None:
+	return info.get('artist') or info.get('uploader') or info.get('channel') or None
+
+
 def _webpage_url(info: dict, fallback: str) -> str:
 	url = info.get('webpage_url') or info.get('original_url')
 	if url:
@@ -150,6 +171,8 @@ async def extract_track(query: str, requester_id: int, requester_name: str) -> T
 		requester_id=requester_id,
 		requester_name=requester_name,
 		query=query,
+		thumbnail=_thumbnail(info),
+		uploader=_uploader(info),
 	)
 
 

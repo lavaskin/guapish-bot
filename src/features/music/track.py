@@ -9,3 +9,5 @@ class Track:
 	requester_id: int
 	requester_name: str
 	query: str
+	thumbnail: str | None = None
+	uploader: str | None = None

@@ -100,3 +100,37 @@ def test_clear_cache_removes_stale_files_only(monkeypatch, tmp_path):
 def test_clear_cache_is_safe_when_directory_is_absent(monkeypatch, tmp_path):
 	monkeypatch.setattr(ex, 'CACHE_DIR', tmp_path / 'does-not-exist')
 	ex.clear_cache()
+
+
+def test_thumbnail_prefers_explicit_then_last_list_then_id():
+	assert ex._thumbnail({'thumbnail': 'https://img/a.jpg'}) == 'https://img/a.jpg'
+	assert ex._thumbnail({
+		'thumbnails': [{'url': 'https://img/small.jpg'}, {'url': 'https://img/large.jpg'}],
+	}) == 'https://img/large.jpg'
+	assert ex._thumbnail({'id': 'abc123'}) == 'https://i.ytimg.com/vi/abc123/hqdefault.jpg'
+	assert ex._thumbnail({}) is None
+
+
+def test_uploader_prefers_artist_then_uploader_then_channel():
+	assert ex._uploader({'artist': 'A', 'uploader': 'B', 'channel': 'C'}) == 'A'
+	assert ex._uploader({'uploader': 'B', 'channel': 'C'}) == 'B'
+	assert ex._uploader({'channel': 'C'}) == 'C'
+	assert ex._uploader({}) is None
+
+
+async def test_extract_track_maps_card_fields(monkeypatch):
+	async def fake_info(query):
+		return {
+			'title': 'Song',
+			'webpage_url': 'https://youtu.be/xyz',
+			'duration': 90,
+			'thumbnail': 'https://img/song.jpg',
+			'artist': 'Band',
+		}
+
+	monkeypatch.setattr(ex, 'extract_info', fake_info)
+	track = await ex.extract_track('Song', 7, 'jackson')
+
+	assert track.thumbnail == 'https://img/song.jpg'
+	assert track.uploader == 'Band'
+	assert track.title == 'Song'

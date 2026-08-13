@@ -7,6 +7,7 @@ import discord
 
 from src.core.bot import GuapishBot
 from src.features.music.extractor import download_audio
+from src.features.music.helpers import disconnected_embed, playback_failed_embed
 from src.features.music.track import Track
 
 
@@ -249,7 +250,7 @@ class GuildPlayer:
 					# Someone skipped/stopped us mid-download. Re-enter the loop so any
 					# remaining queue is still advanced rather than stranded.
 					continue
-				await self._notify(f'Could not play **{track.title}**. Skipping.')
+				await self._notify(playback_failed_embed(track))
 				continue
 
 			dropped = False
@@ -277,10 +278,10 @@ class GuildPlayer:
 						return
 
 			if dropped:
-				await self._notify('I am no longer connected to voice, so playback stopped.')
+				await self._notify(disconnected_embed())
 				return
 
-			await self._notify(f'Could not play **{track.title}**. Skipping.')
+			await self._notify(playback_failed_embed(track))
 
 	def _after(self, error, gen: int):
 		if error:
@@ -311,7 +312,7 @@ class GuildPlayer:
 
 			if failed and track is not None:
 				print(f' ERR > Playback failed for {track.title}: {error}')
-				await self._notify(f'Could not play **{track.title}**. Skipping.')
+				await self._notify(playback_failed_embed(track))
 		except Exception as error:
 			print(f' ERR > track end: {error}')
 
@@ -327,12 +328,15 @@ class GuildPlayer:
 			return False
 		return True
 
-	async def _notify(self, message: str):
+	async def _notify(self, message: str | discord.Embed):
 		if self.text_channel is None:
 			return
 
 		try:
-			await self.text_channel.send(message)
+			if isinstance(message, discord.Embed):
+				await self.text_channel.send(embed=message)
+			else:
+				await self.text_channel.send(message)
 		except Exception as error:
 			print(f' ERR > notify: {error}')
 
