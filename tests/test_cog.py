@@ -126,6 +126,59 @@ async def test_alone_timer_cleared_when_a_human_is_present():
 	assert player._alone_task is None
 
 
+async def test_humans_detected_from_voice_states_when_member_cache_is_empty():
+	cog = make_cog()
+	channel = types.SimpleNamespace(
+		members=[],
+		voice_states={42: types.SimpleNamespace(member=None)},
+	)
+
+	assert cog._channel_has_humans(channel)
+
+
+async def test_voice_states_ignore_the_bot_and_other_bots():
+	cog = make_cog()
+	channel = types.SimpleNamespace(
+		members=[],
+		voice_states={
+			999: types.SimpleNamespace(member=types.SimpleNamespace(bot=True)),
+			100: types.SimpleNamespace(member=types.SimpleNamespace(bot=True)),
+		},
+	)
+
+	assert not cog._channel_has_humans(channel)
+
+
+async def test_rejoin_recovers_stalled_playback(make_player, make_track):
+	import asyncio
+
+	cog = make_cog()
+	player = make_player()
+	cog.players[1] = player
+	channel = player.voice_client.channel
+	channel.voice_states = {42: types.SimpleNamespace(member=None)}
+
+	track = make_track('t1')
+	await player.enqueue(track)
+	await asyncio.sleep(0.15)
+	assert player.voice_client.is_playing()
+
+	player.voice_client._playing = False
+	player.voice_client._after = None
+
+	guild = types.SimpleNamespace(id=1)
+	member = types.SimpleNamespace(id=42, guild=guild, bot=False)
+	before = types.SimpleNamespace(channel=None)
+	after = types.SimpleNamespace(channel=channel)
+
+	await cog.on_voice_state_update(member, before, after)
+	await asyncio.sleep(0.15)
+
+	assert player.current is track
+	assert player.voice_client.is_playing()
+	assert player._alone_task is None
+
+
 class ErrorContext:
 	def __init__(self, already_responded: bool, followup_fails: bool = False):
 		self.command = 'testcmd'

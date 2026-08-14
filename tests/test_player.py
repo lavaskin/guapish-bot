@@ -205,3 +205,73 @@ async def test_disconnect_while_playing_does_not_resurrect_playback(make_player,
 
 	assert player.current is None
 	assert list(player.queue) == []
+
+
+def _stall_audio(player):
+	player.voice_client._playing = False
+	player.voice_client._after = None
+
+
+async def test_stalled_current_does_not_block_new_enqueue(make_player, make_track):
+	player = make_player()
+	first, second = make_track('t1'), make_track('t2')
+	await player.enqueue(first)
+	await settle()
+	assert player.current is first
+	assert player.voice_client.is_playing()
+
+	_stall_audio(player)
+	await player.enqueue(second)
+	await settle()
+
+	assert player.voice_client.is_playing()
+	assert player.current is first
+	assert list(player.queue) == [second]
+
+
+async def test_recover_if_stalled_restarts_dead_audio(make_player, make_track):
+	player = make_player()
+	track = make_track('t1')
+	await player.enqueue(track)
+	await settle()
+	_stall_audio(player)
+
+	await player.recover_if_stalled()
+	await settle()
+
+	assert player.current is track
+	assert player.voice_client.is_playing()
+
+
+async def test_recover_if_stalled_ignores_in_flight_download(make_player, make_track):
+	player = make_player(download_delay=0.2)
+	track = make_track('t1')
+	await player.enqueue(track)
+	await asyncio.sleep(0.02)
+
+	assert player.current is track
+	assert player._current_file is None
+
+	await player.recover_if_stalled()
+	assert player.current is track
+	assert not player.voice_client.is_playing()
+
+	await settle(0.3)
+	assert player.current is track
+	assert player.voice_client.is_playing()
+
+
+async def test_connect_force_disconnects_stale_client(make_player):
+	player = make_player()
+	stale = player.voice_client
+	stale.connected = False
+
+	class FakeChannel:
+		async def connect(self):
+			return type(stale)()
+
+	await player.connect(FakeChannel())
+
+	assert stale.disconnect_calls == 1
+	assert player.voice_client is not stale
+	assert player.voice_client.is_connected()
