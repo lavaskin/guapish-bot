@@ -57,6 +57,21 @@ def audio_file(tmp_path) -> Path:
 	return path
 
 
+class FakeVoiceChannel:
+	"""A voice channel the player can reconnect to, as revive_voice does."""
+
+	def __init__(self, channel_id: int, members, *, factory):
+		self.id = channel_id
+		self.members = members
+		self.mention = '#voice'
+		self.connects = 0
+		self._factory = factory
+
+	async def connect(self):
+		self.connects += 1
+		return self._factory()
+
+
 class ThreadedVoiceClient:
 	"""Fake voice client that fires `after` from a background thread.
 
@@ -67,12 +82,16 @@ class ThreadedVoiceClient:
 	def __init__(self, channel_id: int = 9, members=None):
 		self.connected = True
 		self.disconnect_calls = 0
+		self.cleanup_calls = 0
+		self.plays = 0
+		self.ws_closes = []
+		self.ws = None
 		self._playing = False
 		self._after = None
-		self.channel = types.SimpleNamespace(
-			id=channel_id,
-			members=members if members is not None else [],
-			mention='#voice',
+		self.channel = FakeVoiceChannel(
+			channel_id,
+			members if members is not None else [],
+			factory=lambda: ThreadedVoiceClient(channel_id, members),
 		)
 
 	def is_connected(self) -> bool:
@@ -85,6 +104,7 @@ class ThreadedVoiceClient:
 		return False
 
 	def play(self, source, after=None):
+		self.plays += 1
 		self._playing = True
 		self._after = after
 
@@ -107,6 +127,19 @@ class ThreadedVoiceClient:
 		self.disconnect_calls += 1
 		self.connected = False
 		self._playing = False
+
+	def cleanup(self):
+		self.cleanup_calls += 1
+
+	def set_last_heartbeat_ack(self, when: float):
+		"""Model py-cord's voice keep-alive, which only advances _last_recv on acks."""
+		self.ws = types.SimpleNamespace(
+			_keep_alive=types.SimpleNamespace(_last_recv=when),
+			close=self._close_ws,
+		)
+
+	async def _close_ws(self, code=1000):
+		self.ws_closes.append(code)
 
 
 @pytest.fixture

@@ -18,6 +18,7 @@ from src.features.music.helpers import (
 	stopped_embed,
 )
 from src.features.music.player import GuildPlayer
+from src.features.music.pycord_patch import apply as apply_pycord_patches
 
 
 MAX_QUEUE_SIZE = 50
@@ -28,6 +29,8 @@ class MusicCog(discord.Cog):
 	def __init__(self, bot: GuapishBot):
 		self.bot = bot
 		self.players: dict[int, GuildPlayer] = {}
+		# Before any voice connection exists; see pycord_patch for why.
+		apply_pycord_patches()
 		clear_cache()
 
 	def cog_unload(self):
@@ -62,33 +65,46 @@ class MusicCog(discord.Cog):
 			return None, 'You must be in a voice channel.'
 
 		player = self.players.get(ctx.guild.id)
+		if player is not None:
+			# Our reference can drift from py-cord's during a reconnect; without this
+			# /stop would report 'not playing' and leave the guild wedged.
+			player.resync()
 		if player is None or not player.is_connected:
 			return None, 'I am not playing anything.'
 
-		if player.voice_client.channel.id != channel.id:
+		bot_channel = player.voice_client.channel
+		if bot_channel is not None and bot_channel.id != channel.id:
 			return None, 'You must be in the same voice channel as me.'
 
 		return player, None
 
 	def _channel_has_humans(self, channel) -> bool:
 		bot_id = getattr(getattr(self.bot, 'user', None), 'id', None)
+		# channel.members needs the privileged members intent to be reliable; with
+		# Intents.default() anyone who was already in voice when the process started
+		# is missing from it. voice_states is the documented low-level replacement,
+		# but a VoiceState carries no member (it is __slots__ with no such field),
+		# so ids have to be resolved through the guild and anything we cannot
+		# resolve has to count as a human.
 		voice_states = getattr(channel, 'voice_states', None)
-		if voice_states is not None:
-			for user_id, state in voice_states.items():
+		if voice_states:
+			guild = getattr(channel, 'guild', None)
+			for user_id in voice_states:
 				if user_id == bot_id:
 					continue
-				member = getattr(state, 'member', None)
+				member = guild.get_member(user_id) if guild is not None else None
 				if member is not None and getattr(member, 'bot', False):
 					continue
 				return True
 			return False
 
-		return any(not member.bot for member in channel.members)
+		return any(not member.bot for member in getattr(channel, 'members', ()))
 
 	async def _sync_alone_state(self, player: GuildPlayer, channel):
 		if self._channel_has_humans(channel):
-			player.cancel_alone_timer()
-			await player.recover_if_stalled()
+			# Discord orphans the bot's voice session while the channel is empty, so a
+			# rejoin has to verify the session is still alive rather than assume it.
+			await player.note_humans_present()
 		else:
 			player.start_alone_timer()
 
@@ -101,16 +117,24 @@ class MusicCog(discord.Cog):
 
 		if self.bot.user is not None and member.id == self.bot.user.id:
 			if before.channel is not None and after.channel is None:
-				await player.handle_disconnect()
+				# Do not trust this yet: py-cord emits it while rebuilding a dropped
+				# voice session too, and tearing down here detaches us from the voice
+				# client it is still holding for this guild.
+				player.confirm_disconnect()
 				return
 			if after.channel is not None:
+				player.note_reconnect()
 				await self._sync_alone_state(player, after.channel)
 			return
 
-		if not player.is_connected or player.voice_client.channel is None:
+		# Deliberately not gated on is_connected: during a reconnect the session is
+		# briefly down, and missing a rejoin in that window would leave the alone
+		# timer armed and disconnect us 60s later with people still listening.
+		player.resync()
+		bot_channel = getattr(player.voice_client, 'channel', None)
+		if bot_channel is None:
 			return
 
-		bot_channel = player.voice_client.channel
 		left_bot_channel = before.channel is not None and before.channel.id == bot_channel.id
 		joined_bot_channel = after.channel is not None and after.channel.id == bot_channel.id
 		if not left_bot_channel and not joined_bot_channel:
@@ -135,8 +159,10 @@ class MusicCog(discord.Cog):
 			return
 
 		player = self._get_player(ctx.guild.id)
-		if player.is_connected and player.voice_client.channel.id != channel.id:
-			await ctx.respond(f'I am already playing in {player.voice_client.channel.mention}.', ephemeral=True)
+		player.resync()
+		bot_channel = player.voice_client.channel if player.is_connected else None
+		if bot_channel is not None and bot_channel.id != channel.id:
+			await ctx.respond(f'I am already playing in {bot_channel.mention}.', ephemeral=True)
 			return
 
 		await ctx.defer()
