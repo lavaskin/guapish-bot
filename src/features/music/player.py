@@ -66,6 +66,35 @@ class GuildPlayer:
 			running = (datetime.now() - self.started_at).total_seconds()
 		return self.elapsed_offset + running
 
+	def _playback_stalled(self) -> bool:
+		return (
+			self.current is not None
+			and self._current_file is not None
+			and not self.is_playing
+			and not self.is_paused
+		)
+
+	def _reclaim_stalled_current(self):
+		if not self._playback_stalled():
+			return
+
+		track = self.current
+		self._play_gen += 1
+		self.current = None
+		self.started_at = None
+		self.elapsed_offset = 0.0
+		self._cleanup_file()
+		self.queue.appendleft(track)
+
+	async def recover_if_stalled(self):
+		async with self.lock:
+			if not self.is_connected:
+				return
+
+			self._reclaim_stalled_current()
+			if self.current is None and self.queue:
+				self._ensure_driver()
+
 	async def connect(self, channel: discord.VoiceChannel | discord.StageChannel):
 		async with self.lock:
 			self._cancel_idle()
@@ -74,11 +103,28 @@ class GuildPlayer:
 					await self.voice_client.move_to(channel)
 				return
 
+			stale = self.voice_client
+			self.voice_client = None
+			if stale is not None:
+				try:
+					await stale.disconnect(force=True)
+				except Exception as error:
+					print(f' ERR > stale disconnect: {error}')
+
+			guild = self.bot.get_guild(self.guild_id) if self.bot is not None else None
+			leftover = getattr(guild, 'voice_client', None) if guild is not None else None
+			if leftover is not None:
+				try:
+					await leftover.disconnect(force=True)
+				except Exception as error:
+					print(f' ERR > leftover disconnect: {error}')
+
 			self.voice_client = await channel.connect()
 
 	async def enqueue(self, track: Track) -> tuple[bool, int]:
 		async with self.lock:
 			self._cancel_idle()
+			self._reclaim_stalled_current()
 			should_start = self.current is None and not self.queue
 			self.queue.append(track)
 			# Spawn the driver under the same lock acquisition as the append, so a
@@ -212,13 +258,17 @@ class GuildPlayer:
 
 		if voice_client.is_playing() or voice_client.is_paused():
 			voice_client.stop()
-		if disconnect and voice_client.is_connected():
-			await voice_client.disconnect()
+		if disconnect:
+			try:
+				await voice_client.disconnect(force=True)
+			except Exception as error:
+				print(f' ERR > disconnect: {error}')
 
 	async def _play_next(self, announce: bool = False):
 		while True:
 			async with self.lock:
 				self._cancel_idle()
+				self._reclaim_stalled_current()
 				if self.current is not None:
 					return
 

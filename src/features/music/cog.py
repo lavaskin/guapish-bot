@@ -71,11 +71,24 @@ class MusicCog(discord.Cog):
 		return player, None
 
 	def _channel_has_humans(self, channel) -> bool:
+		bot_id = getattr(getattr(self.bot, 'user', None), 'id', None)
+		voice_states = getattr(channel, 'voice_states', None)
+		if voice_states is not None:
+			for user_id, state in voice_states.items():
+				if user_id == bot_id:
+					continue
+				member = getattr(state, 'member', None)
+				if member is not None and getattr(member, 'bot', False):
+					continue
+				return True
+			return False
+
 		return any(not member.bot for member in channel.members)
 
 	async def _sync_alone_state(self, player: GuildPlayer, channel):
 		if self._channel_has_humans(channel):
 			player.cancel_alone_timer()
+			await player.recover_if_stalled()
 		else:
 			player.start_alone_timer()
 
