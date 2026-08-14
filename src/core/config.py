@@ -41,14 +41,14 @@ class AppConfig:
 	def load_env(self) -> None:
 		load_dotenv()
 
-		self.dev_mode = self._parse_bool(os.getenv('DEV_MODE'), default=True)
+		self.dev_mode = self._parse_bool(os.getenv('DEV_MODE'), default=True, key='DEV_MODE')
 
 		self.bot_token = self.env('BOT_TOKEN')
 		self.allowed_rollers = self.env_list('ALLOWED_ROLLERS', DEFAULT_ALLOWED_ROLLERS)
 		self.patreon_role = self.env('PATREON_ROLE')
 
 	@staticmethod
-	def _parse_bool(value: str | None, *, default: bool) -> bool:
+	def _parse_bool(value: str | None, *, default: bool, key: str = 'DEV_MODE') -> bool:
 		if value is None:
 			return default
 
@@ -59,4 +59,4 @@ class AppConfig:
 			return False
 
 		# Never silently fall through to prod on a typo.
-		raise ValueError(f'DEV_MODE must be one of {sorted(TRUTHY | FALSY)}, got: {value!r}')
+		raise ValueError(f'{key} must be one of {sorted(TRUTHY | FALSY)}, got: {value!r}')
