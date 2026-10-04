@@ -17,7 +17,10 @@ YDL_OPTS = {
 	'format': 'bestaudio/best',
 	'noplaylist': True,
 	'quiet': True,
-	'no_warnings': True,
+	# Keep warnings: when YouTube outpaces yt-dlp, the only explanation for the
+	# eventual 'HTTP Error 403' is a 'Signature solving failed' / 'n challenge
+	# solving failed' warning, and suppressing it is how playback broke silently.
+	'no_warnings': False,
 	'impersonate': ImpersonateTarget('chrome'),
 }
 

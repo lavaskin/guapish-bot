@@ -85,6 +85,13 @@ async def test_concurrent_downloads_of_same_video_use_distinct_paths(monkeypatch
 	assert len(seen) == 3
 
 
+def test_youtube_challenge_solver_is_installed():
+	"""Without yt-dlp-ejs, YouTube's signature/n challenges go unsolved and
+	formats that need them are dropped or 403 on download. yt-dlp only says so in
+	a warning, which YDL_OPTS used to suppress."""
+	import yt_dlp_ejs  # noqa: F401
+
+
 def test_clear_cache_removes_stale_files_only(monkeypatch, tmp_path):
 	monkeypatch.setattr(ex, 'CACHE_DIR', tmp_path)
 	(tmp_path / '1-aaa-vid.m4a').write_text('x')
