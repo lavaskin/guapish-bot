@@ -27,6 +27,7 @@ To join the Discord server, subscribe to the [GUAPISH Patreon](https://www.patre
 ## Setup
 
 - Install FFmpeg and make sure `ffmpeg` is on your `PATH`.
+- Install [Deno](https://deno.land) and make sure `deno` is on your `PATH`. yt-dlp needs a JS runtime to solve YouTube's playback challenges (via the `yt-dlp-ejs` package); without one most tracks fail to download with `HTTP Error 403`.
 - Install the dependencies with poetry using ```poetry install```.
 - Fill out the needed fields referenced in ```.env-example.txt``` in a new ```.env``` file.
 - Get a ```firebase.json``` file from your Firebase app to hookup to Firestore with.
@@ -53,6 +54,15 @@ poetry install --with dev
 - `tests/test_skip.py` — `/skip` reporting, including a timing sweep that
   regression-tests skip-spam
 - `tests/test_extractor.py` — YouTube-only guard, duration/live limits, temp files
+- `tests/test_extractor_live.py` — opt-in smoke test against real YouTube:
+  `MUSIC_LIVE=1 ./test tests/test_extractor_live.py`
+
+### When `/play` starts failing
+
+YouTube regularly breaks older yt-dlp releases. Extraction keeps working, but the
+download step gets `HTTP Error 403`, so every track shows "Could not play". Run the
+live test; if it fails, update yt-dlp (`poetry update yt-dlp && poetry install`) and
+run it again.
 - `tests/test_cog.py` — queue caps, alone detection, error reporting
 - `tests/test_config.py` — environment parsing
 

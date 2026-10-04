@@ -10,7 +10,9 @@ python = ">=3.10,<3.15"
 py-cord = {version = "^2.8", extras = ["voice"]}
 python-dotenv = "^1.0.1"
 firebase-admin = "^6.5.0"
-yt-dlp = ">=2026.7.4"
+# `default` pulls in yt-dlp-ejs (the YouTube challenge solver, pinned to match
+# each yt-dlp release). It also needs a JS runtime on PATH; deno is recommended.
+yt-dlp = {version = ">=2026.8.19", extras = ["default"]}
 curl-cffi = ">=0.10,<0.16"
 
 [tool.poetry.group.dev.dependencies]
@@ -24,6 +26,7 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 markers = [
 	"slow: timing sweeps; deselect with -m 'not slow'",
+	"live: hits real YouTube; skipped unless MUSIC_LIVE=1",
 ]
 
 [build-system]
