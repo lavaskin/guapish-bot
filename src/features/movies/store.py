@@ -49,15 +49,21 @@ class MoviesStore:
 		self.get_requests_ref().add(request.to_dict())
 
 	def mark_picked(self, request: MovieRequestModel) -> None:
-		if not request.document_id:
-			raise ValueError('Cannot mark a request as picked without a document_id')
+		self._write_pick(request, picked=True, last_id=request.user_id)
 
-		self.get_requests_ref().document(request.document_id).update({
-			'picked': True
-		})
-		self.get_metadata_doc().update({
-			'last_id': request.user_id
-		})
+	def unmark_picked(self, request: MovieRequestModel, previous_last_id: str | None) -> None:
+		"""Undo mark_picked, restoring the last winner it replaced."""
+		self._write_pick(request, picked=False, last_id=previous_last_id)
+
+	def _write_pick(self, request: MovieRequestModel, *, picked: bool, last_id: str | None) -> None:
+		if not request.document_id:
+			raise ValueError('Cannot change the picked state of a request without a document_id')
+
+		# One batch, so the request and the last winner can never disagree.
+		batch = self.firebase.batch()
+		batch.update(self.get_requests_ref().document(request.document_id), {'picked': picked})
+		batch.set(self.get_metadata_doc(), {'last_id': last_id}, merge=True)
+		batch.commit()
 
 	def _unpicked_query(self):
 		return self.get_requests_ref().where(filter=FieldFilter('picked', '==', False))

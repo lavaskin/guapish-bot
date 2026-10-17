@@ -39,9 +39,9 @@ else** rather than silently falling back to production.
 
 ## Tests
 
-The music player is concurrent (a background queue driver, two disconnect timers,
-downloads on worker threads), so it has an offline test suite. No Discord
-connection, Firebase credentials, ffmpeg or network access is required.
+An offline test suite covers the feature cogs and shared core. Discord, Firestore
+and downloads are faked, so no Discord connection, Firebase credentials, ffmpeg or
+network access is required.
 
 ```bash
 poetry install --with dev
@@ -56,6 +56,10 @@ poetry install --with dev
 - `tests/test_extractor.py` — YouTube-only guard, duration/live limits, temp files
 - `tests/test_extractor_live.py` — opt-in smoke test against real YouTube:
   `MUSIC_LIVE=1 ./test tests/test_extractor_live.py`
+- `tests/test_cog.py` — queue caps, alone detection, error reporting
+- `tests/test_roll.py` — `/roll` never leaves a pick marked without announcing it,
+  and the pick card's copy
+- `tests/test_config.py` — environment parsing
 
 ### When `/play` starts failing
 
@@ -63,8 +67,6 @@ YouTube regularly breaks older yt-dlp releases. Extraction keeps working, but th
 download step gets `HTTP Error 403`, so every track shows "Could not play". Run the
 live test; if it fails, update yt-dlp (`poetry update yt-dlp && poetry install`) and
 run it again.
-- `tests/test_cog.py` — queue caps, alone detection, error reporting
-- `tests/test_config.py` — environment parsing
 
 ## Project structure
 

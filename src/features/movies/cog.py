@@ -1,10 +1,11 @@
+import asyncio
 import random
 import discord
 from datetime import datetime
 
 from src.core.bot import GuapishBot
 from src.core.pagination import PaginationView
-from src.features.movies.helpers import build_request_pages, get_months_since, get_request_entries, render_requests_page
+from src.features.movies.helpers import build_request_pages, get_months_since, get_request_entries, render_requests_page, rolled_embed
 from src.features.movies.movie_request import MovieRequestModel
 from src.features.movies.store import MoviesStore
 
@@ -125,8 +126,16 @@ class MoviesCog(discord.Cog):
 			await ctx.respond('You are not allowed to use this command!', ephemeral=True)
 			return
 
+		# Discord drops an interaction that isn't acknowledged within 3 seconds, and
+		# Firestore can be slower than that (e.g. the first call after a long idle).
+		# Acknowledge before any Firestore work, so if the interaction has already
+		# expired this raises here, before anything is written.
+		await ctx.defer()
+
 		try:
-			requests = self.store.get_eligible_requests()
+			# Firestore's client is blocking; keep it off the event loop.
+			metadata = await asyncio.to_thread(self.store.get_metadata)
+			requests = await asyncio.to_thread(self.store.get_eligible_requests, metadata=metadata)
 		except Exception as error:
 			print(f' ERR (roll) > {error}')
 			await ctx.respond('There are no valid requests at the moment.')
@@ -145,6 +154,22 @@ class MoviesCog(discord.Cog):
 
 		print(f'LOG > Rolled {picked_request.title} ({picked_request.year})')
 
-		self.store.mark_picked(picked_request)
+		embed = rolled_embed(
+			picked_request,
+			entries=get_request_entries(picked_request),
+			total_entries=len(new_requests),
+			request_count=len(requests),
+			roller_name=ctx.author.name,
+		)
 
-		await ctx.respond(f':down_arrow: Picked {picked_request.title} (*{picked_request.year}*) by **{picked_request.user_name}**')
+		await asyncio.to_thread(self.store.mark_picked, picked_request
+
+		try:
+			await ctx.respond(embed=embed)
+		except Exception:
+			# A pick nobody was told about can only be fixed by hand in Firestore,
+			# so undo it and let the roller roll again.
+			print(f' ERR (roll) > Could not announce {picked_request.title} ({picked_request.year}) [{picked_request.document_id}], reverting the pick')
+			await asyncio.to_thread(self.store.unmark_picked, picked_request, metadata.last_id)
+			print(f'LOG > Reverted pick of {picked_request.title} ({picked_request.year})')
+			raise

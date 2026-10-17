@@ -9,3 +9,6 @@ class Firebase:
 
 	def collection(self, name: str) -> firestore.CollectionReference:
 		return self.firestore.collection(name)
+
+	def batch(self):
+		return self.firestore.batch()
