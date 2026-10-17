@@ -162,7 +162,7 @@ class MoviesCog(discord.Cog):
 			roller_name=ctx.author.name,
 		)
 
-		await asyncio.to_thread(self.store.mark_picked, picked_request
+		await asyncio.to_thread(self.store.mark_picked, picked_request)
 
 		try:
 			await ctx.respond(embed=embed)
